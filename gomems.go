@@ -7,11 +7,27 @@ import "io/ioutil"
 import "net/http"
 import "regexp"
 import "encoding/json"
-import "code.google.com/p/go-sqlite/go1/sqlite3"
+import "github.com/mxk/go-sqlite/sqlite3"
 import "time"
+
+type ColumnData struct {
+    Value string `json:"val"`
+}
+
+type ColumnRootData struct {
+    Column1 ColumnData `json:"1"`
+    Column2 ColumnData `json:"2"`
+    Column3 ColumnData `json:"3"`
+}
+
+type ThingData struct {
+    Columns    ColumnRootData `json:"columns"`
+}
 
 type MemData struct {
     MemId            int `json:"id"`
+    Rating           int `json:"rating"`
+    Thing            ThingData `json:"thing"`
 }
 
 const baseMemId int64 = 5001
@@ -48,24 +64,15 @@ func loadDatabase() {
     dbConn.Exec("CREATE TABLE mems(id BIGINT PRIMARY KEY, updated DATE, valid BOOLEAN, connected BOOLEAN, ratings BIGINT, value STRING);")
     dbConn.Exec("CREATE TABLE global(current_id BIGINT);")
 
-    rows, err := dbConn.Query("SELECT current_id FROM global")
-    if err != nil {
-        fmt.Println("DB ERROR: ", err)
-        panic(err)
-    }
-
+    /*rows, _ := dbConn.Query("SELECT current_id FROM global")
     defer rows.Close()
     rows.Next()
-
-    rows.Scan(&currentId)
+    rows.Scan(&currentId)*/
 
     if currentId == baseMemId {
         currentIdInsert := fmt.Sprintf(`INSERT OR REPLACE INTO global(current_id) VALUES(%v)`, baseMemId)
         dbConn.Exec(currentIdInsert)
     }
-    //fmt.Println(rows)
-        //s.Scan(&currentId, row)
-        //fmt.Println("Found current id")
 
     fmt.Println(currentId)
 }
@@ -107,13 +114,14 @@ func scrapeMem(c chan int64, dbChan chan string) {
                     //fmt.Println((res[1]))
                     err = json.Unmarshal([]byte(res[1]), &data)
                     if err != nil {
-                        fmt.Println("JSON Error: ", err)
+                        fmt.Println("JSON Error: ", err, mem_id)
                         valid = 0
                     }
                 }
             }
 
             t := time.Now()
+            fmt.Println(data.Thing.Columns.Column1.Value)
             memInsert := fmt.Sprintf(`INSERT OR REPLACE INTO mems(id, updated, valid, connected, ratings, value) VALUES(%v, %v, %d, %d, %v, %v)`, mem_id, t.Format("20060102"), valid, connected, 0, 0);
             if valid == 1 {
                 currentIdInsert := fmt.Sprintf(`UPDATE global SET current_id=%v WHERE current_id < %v;`, mem_id, mem_id)
